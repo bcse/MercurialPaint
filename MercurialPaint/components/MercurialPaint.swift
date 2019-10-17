@@ -18,10 +18,10 @@ class MercurialPaint: UIView
     
     let device = MTLCreateSystemDefaultDevice()!
     let alignment:Int = 0x4000
-    let particlesMemoryByteSize:Int = particleCount * sizeof(Int)
-    let halfPi = CGFloat(M_PI_2)
+    let particlesMemoryByteSize:Int = particleCount * MemoryLayout<Int>.size
+    let halfPi = CGFloat.pi / 2
     
-    let ciContext = CIContext(EAGLContext: EAGLContext(API: EAGLRenderingAPI.OpenGLES2), options: [kCIContextWorkingColorSpace: NSNull()])
+    let ciContext = CIContext(eaglContext: EAGLContext(api: .openGLES2)!, options: [CIContextOption.workingColorSpace: NSNull()])
     let heightMapFilter = CIFilter(name: "CIHeightFieldFromMask")!
     let shadedMaterialFilter = CIFilter(name: "CIShadedMaterial")!
     let maskToAlpha = CIFilter(name: "CIMaskToAlpha")!
@@ -31,13 +31,13 @@ class MercurialPaint: UIView
     private var threadsPerThreadgroup:MTLSize!
     private var threadgroupsPerGrid:MTLSize!
     
-    private var particlesMemory:UnsafeMutablePointer<Void> = nil
-    private var particlesVoidPtr: COpaquePointer!
+    private var particlesMemory: UnsafeMutableRawPointer? = nil
+    private var particlesVoidPtr: OpaquePointer!
     private var particlesParticlePtr: UnsafeMutablePointer<Int>!
     private var particlesParticleBufferPtr: UnsafeMutableBufferPointer<Int>!
     
     private var particlesBufferNoCopy: MTLBuffer!
-    private var touchLocations = [CGPoint](count: 4, repeatedValue: CGPoint(x: -1, y: -1))
+    private var touchLocations = [CGPoint](repeating: CGPoint(x: -1, y: -1), count: 4)
     private var touchForce:Float = 0
     
     private var pendingUpdate = false
@@ -48,7 +48,7 @@ class MercurialPaint: UIView
         {
             if isDrawing
             {
-                metalView.paused = false
+                metalView.isPaused = false
             }
         }
     }
@@ -70,7 +70,7 @@ class MercurialPaint: UIView
  
     // MARK: Lazy variables
     
-    let textureDescriptor = MTLTextureDescriptor.texture2DDescriptorWithPixelFormat(MTLPixelFormat.RGBA8Unorm,
+    let textureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: MTLPixelFormat.rgba8Unorm,
         width: 2048,
         height: 2048,
         mipmapped: false)
@@ -79,14 +79,16 @@ class MercurialPaint: UIView
     {
         [unowned self] in
 
-        return self.device.newTextureWithDescriptor(self.textureDescriptor)
+        self.textureDescriptor.usage = [.shaderRead, .shaderWrite]
+        return self.device.makeTexture(descriptor: self.textureDescriptor)!
     }()
     
     lazy var intermediateTexture: MTLTexture =
     {
         [unowned self] in
         
-        return self.device.newTextureWithDescriptor(self.textureDescriptor)
+        self.textureDescriptor.usage = [.shaderRead, .shaderWrite]
+        return self.device.makeTexture(descriptor: self.textureDescriptor)!
         }()
     
     lazy var paintingShaderPipelineState: MTLComputePipelineState =
@@ -95,10 +97,10 @@ class MercurialPaint: UIView
         
         do
         {
-            let library = self.device.newDefaultLibrary()!
+            let library = self.device.makeDefaultLibrary()!
             
-            let kernelFunction = library.newFunctionWithName("mercurialPaintShader")
-            let pipelineState = try self.device.newComputePipelineStateWithFunction(kernelFunction!)
+            let kernelFunction = library.makeFunction(name: "mercurialPaintShader")
+            let pipelineState = try self.device.makeComputePipelineState(function: kernelFunction!)
             
             return pipelineState
         }
@@ -112,7 +114,7 @@ class MercurialPaint: UIView
     {
        [unowned self] in
         
-        return self.device.newCommandQueue()
+        return self.device.makeCommandQueue()!
     }()
     
     lazy var blur: MPSImageGaussianBlur =
@@ -140,11 +142,11 @@ class MercurialPaint: UIView
         metalView = MTKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 1024), device: device)
         
         metalView.framebufferOnly = false
-        metalView.colorPixelFormat = MTLPixelFormat.BGRA8Unorm
+        metalView.colorPixelFormat = .bgra8Unorm
         
         metalView.delegate = self
         
-        layer.borderColor = UIColor.whiteColor().CGColor
+        layer.borderColor = UIColor.white.cgColor
         layer.borderWidth = 1
    
         metalView.drawableSize = CGSize(width: 2048, height: 2048)
@@ -154,7 +156,7 @@ class MercurialPaint: UIView
         
         setUpMetal()
         
-        metalView.paused = true
+        metalView.isPaused = true
     }
 
     required init(coder: NSCoder)
@@ -166,7 +168,7 @@ class MercurialPaint: UIView
     {
         posix_memalign(&particlesMemory, alignment, particlesMemoryByteSize)
         
-        particlesVoidPtr = COpaquePointer(particlesMemory)
+        particlesVoidPtr = OpaquePointer(particlesMemory)
         particlesParticlePtr = UnsafeMutablePointer<Int>(particlesVoidPtr)
         particlesParticleBufferPtr = UnsafeMutableBufferPointer(start: particlesParticlePtr, count: particleCount)
         
@@ -180,47 +182,47 @@ class MercurialPaint: UIView
         threadsPerThreadgroup = MTLSize(width:threadExecutionWidth,height:1,depth:1)
         threadgroupsPerGrid = MTLSize(width:particleCount / threadExecutionWidth, height:1, depth:1)
         
-        particlesBufferNoCopy = device.newBufferWithBytesNoCopy(particlesMemory,
+        particlesBufferNoCopy = device.makeBuffer(bytesNoCopy: particlesMemory!,
             length: Int(particlesMemoryByteSize),
-            options: MTLResourceOptions.StorageModeShared,
+            options: .storageModeShared,
             deallocator: nil)
     }
     
     // MARK: Touch handlers
     
-    override func touchesBegan(touches: Set<UITouch>, withEvent event: UIEvent?)
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?)
     {
         guard let touch = touches.first else
         {
             return
         }
         
-        touchForce = touch.type == .Stylus
+        touchForce = touch.type == .stylus
             ? Float(touch.force / touch.maximumPossibleForce)
             : 0.5
 
-        touchLocations = [touch.locationInView(self)]
+        touchLocations = [touch.location(in: self)]
     
         isDrawing = true
     }
     
-    override func touchesMoved(touches: Set<UITouch>, withEvent event: UIEvent?)
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?)
     {
-        guard let touch = touches.first, coalescedTouches =  event?.coalescedTouchesForTouch(touch) else
+        guard let touch = touches.first, let coalescedTouches = event?.coalescedTouches(for: touch) else
         {
             return
         }
 
-        touchForce = touch.type == .Stylus
+        touchForce = touch.type == .stylus
             ? Float(touch.force / touch.maximumPossibleForce)
             : 0.5
         
-        touchLocations = coalescedTouches.map{ return $0.locationInView(self) }
+        touchLocations = coalescedTouches.map{ return $0.location(in: self) }
     }
     
-    override func touchesEnded(touches: Set<UITouch>, withEvent event: UIEvent?)
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?)
     {
-        touchLocations = [CGPoint](count: 4, repeatedValue: CGPoint(x: -1, y: -1))
+        touchLocations = [CGPoint](repeating: CGPoint(x: -1, y: -1), count: 4)
         
         applyCoreImageFilter()
         
@@ -244,40 +246,40 @@ class MercurialPaint: UIView
             return
         }
         
-        guard let shadingImage = shadingImage, ciShadingImage = CIImage(image: shadingImage) else
+        guard let shadingImage = shadingImage, let ciShadingImage = CIImage(image: shadingImage) else
         {
             return
         }
         
         isBusy = true
         
-        let mercurialImage = CIImage(MTLTexture: drawable.texture, options: nil)
+        let mercurialImage = CIImage(mtlTexture: drawable.texture, options: nil)
         
-        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0))
+        DispatchQueue.global().async
         {
-            let heightMapFilter = self.heightMapFilter.copy()
-            let shadedMaterialFilter = self.shadedMaterialFilter.copy()
-            let maskToAlpha = self.maskToAlpha.copy()
+            let heightMapFilter = self.heightMapFilter.copy() as! CIFilter
+            let shadedMaterialFilter = self.shadedMaterialFilter.copy() as! CIFilter
+            let maskToAlpha = self.maskToAlpha.copy() as! CIFilter
             
             maskToAlpha.setValue(mercurialImage,
                 forKey: kCIInputImageKey)
             
-            heightMapFilter.setValue(maskToAlpha.valueForKey(kCIOutputImageKey),
+            heightMapFilter.setValue(maskToAlpha.value(forKey: kCIOutputImageKey),
                 forKey: kCIInputImageKey)
             
-            shadedMaterialFilter.setValue(heightMapFilter.valueForKey(kCIOutputImageKey),
+            shadedMaterialFilter.setValue(heightMapFilter.value(forKey: kCIOutputImageKey),
                 forKey: kCIInputImageKey)
             
             shadedMaterialFilter.setValue(ciShadingImage,
                 forKey: "inputShadingImage")
             
-            let filteredImageData = shadedMaterialFilter.valueForKey(kCIOutputImageKey) as! CIImage
+            let filteredImageData = shadedMaterialFilter.value(forKey: kCIOutputImageKey) as! CIImage
             let filteredImageRef = self.ciContext.createCGImage(filteredImageData,
-                fromRect: filteredImageData.extent)
+                                                                from: filteredImageData.extent)
             
-            let finalImage = UIImage(CGImage: filteredImageRef)
+            let finalImage = UIImage(cgImage: filteredImageRef!)
             
-            dispatch_async(dispatch_get_main_queue())
+            DispatchQueue.main.async
             {
                 self.imageView.image = finalImage
                 self.isBusy = false
@@ -305,10 +307,10 @@ class MercurialPaint: UIView
             }
         }
         
-        let x = touchLocations.count > 0 ? getValue(touchLocations[0], xy: xy) : -1
-        let y = touchLocations.count > 1 ? getValue(touchLocations[1], xy: xy) : -1
-        let z = touchLocations.count > 2 ? getValue(touchLocations[2], xy: xy) : -1
-        let w = touchLocations.count > 3 ? getValue(touchLocations[3], xy: xy) : -1
+        let x = touchLocations.count > 0 ? getValue(point: touchLocations[0], xy: xy) : -1
+        let y = touchLocations.count > 1 ? getValue(point: touchLocations[1], xy: xy) : -1
+        let z = touchLocations.count > 2 ? getValue(point: touchLocations[2], xy: xy) : -1
+        let w = touchLocations.count > 3 ? getValue(point: touchLocations[3], xy: xy) : -1
         
         let returnValue = vector_int4(x, y, z, w)
         
@@ -319,39 +321,38 @@ class MercurialPaint: UIView
 
 extension MercurialPaint: MTKViewDelegate
 {
-    func mtkView(view: MTKView, drawableSizeWillChange size: CGSize)
-    {
+    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         
     }
     
-    func drawInMTKView(view: MTKView)
+    func draw(in view: MTKView)
     {
-        let commandBuffer = commandQueue.commandBuffer()
-        let commandEncoder = commandBuffer.computeCommandEncoder()
+        guard let commandBuffer = commandQueue.makeCommandBuffer() else { return }
+        guard let commandEncoder = commandBuffer.makeComputeCommandEncoder() else { return }
         
         commandEncoder.setComputePipelineState(paintingShaderPipelineState)
         
-        commandEncoder.setBuffer(particlesBufferNoCopy, offset: 0, atIndex: 0)
+        commandEncoder.setBuffer(particlesBufferNoCopy, offset: 0, index: 0)
     
-        var xLocation = touchLocationsToVector(.X)
-        let xLocationBuffer = device.newBufferWithBytes(&xLocation,
-            length: sizeof(vector_int4),
-            options: MTLResourceOptions.CPUCacheModeDefaultCache)
+        var xLocation = touchLocationsToVector(xy: .X)
+        let xLocationBuffer = device.makeBuffer(bytes: &xLocation,
+                                                length: MemoryLayout<vector_int4>.size,
+                                                options: [])
         
-        var yLocation = touchLocationsToVector(.Y)
-        let yLocationBuffer = device.newBufferWithBytes(&yLocation,
-            length: sizeof(vector_int4),
-            options: MTLResourceOptions.CPUCacheModeDefaultCache)
+        var yLocation = touchLocationsToVector(xy: .Y)
+        let yLocationBuffer = device.makeBuffer(bytes: &yLocation,
+                                                length: MemoryLayout<vector_int4>.size,
+                                                options: [])
         
-        let touchForceBuffer = device.newBufferWithBytes(&touchForce,
-            length: sizeof(Float),
-            options: MTLResourceOptions.CPUCacheModeDefaultCache)
+        let touchForceBuffer = device.makeBuffer(bytes: &touchForce,
+                                                 length: MemoryLayout<Float>.size,
+                                                 options: [])
         
-        commandEncoder.setBuffer(xLocationBuffer, offset: 0, atIndex: 1)
-        commandEncoder.setBuffer(yLocationBuffer, offset: 0, atIndex: 2)
-        commandEncoder.setBuffer(touchForceBuffer, offset: 0, atIndex: 3)
+        commandEncoder.setBuffer(xLocationBuffer, offset: 0, index: 1)
+        commandEncoder.setBuffer(yLocationBuffer, offset: 0, index: 2)
+        commandEncoder.setBuffer(touchForceBuffer, offset: 0, index: 3)
         
-        commandEncoder.setTexture(paintingTexture, atIndex: 0)
+        commandEncoder.setTexture(paintingTexture, index: 0)
         
         commandEncoder.dispatchThreadgroups(threadgroupsPerGrid, threadsPerThreadgroup: threadsPerThreadgroup)
         
@@ -364,11 +365,11 @@ extension MercurialPaint: MTKViewDelegate
             return
         }
         
-        blur.encodeToCommandBuffer(commandBuffer,
+        blur.encode(commandBuffer: commandBuffer,
             sourceTexture: paintingTexture,
             destinationTexture: intermediateTexture)
         
-        threshold.encodeToCommandBuffer(commandBuffer,
+        threshold.encode(commandBuffer: commandBuffer,
             sourceTexture: intermediateTexture,
             destinationTexture: drawable.texture)
         
@@ -376,7 +377,7 @@ extension MercurialPaint: MTKViewDelegate
         
         drawable.present()
  
-        view.paused = !isDrawing
+        view.isPaused = !isDrawing
     }
 }
 

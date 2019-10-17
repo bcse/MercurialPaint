@@ -18,17 +18,17 @@ class ViewController: UIViewController
     {
         super.viewDidLoad()
         
-        view.backgroundColor = UIColor.blackColor()
+        view.backgroundColor = .black
        
         view.addSubview(mercurialPaint)
         view.addSubview(shadingImageEditor)
         
         shadingImageEditor.addTarget(self,
-            action: "shadingImageChange",
-            forControlEvents: UIControlEvents.ValueChanged)
+                                     action: #selector(shadingImageChange),
+                                     for: .valueChanged)
     }
 
-    func shadingImageChange()
+    @objc func shadingImageChange()
     {
         mercurialPaint.shadingImage = shadingImageEditor.image
     }
@@ -46,9 +46,8 @@ class ViewController: UIViewController
             height: view.frame.height)
     }
     
-    override func prefersStatusBarHidden() -> Bool
-    {
-        return true
+    override var prefersStatusBarHidden: Bool {
+        get { return true }
     }
 }
 

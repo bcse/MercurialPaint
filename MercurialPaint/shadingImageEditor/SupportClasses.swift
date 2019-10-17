@@ -71,7 +71,7 @@ class OmniLight: SCNNode
         super.init()
         
         let omniLight = SCNLight()
-        omniLight.type = SCNLightTypeOmni
+        omniLight.type = .omni
         
         light = omniLight
         

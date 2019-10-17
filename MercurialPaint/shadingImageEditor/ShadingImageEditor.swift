@@ -75,7 +75,7 @@ class ShadingImageEditor: UIControl
     {
         super.init(frame: frame)
         
-        sceneKitView.layer.borderColor = UIColor.darkGrayColor().CGColor
+        sceneKitView.layer.borderColor = UIColor.darkGray.cgColor
         sceneKitView.layer.borderWidth = 1
         
         sceneKitView.delegate = self
@@ -91,10 +91,10 @@ class ShadingImageEditor: UIControl
         
         tableView.rowHeight = 60
         
-        tableView.registerClass(ItemRenderer.self,
+        tableView.register(ItemRenderer.self,
             forCellReuseIdentifier: "ItemRenderer")
         
-        for (index, _) in lights.enumerate()
+        for (index, _) in lights.enumerated()
         {
             let lightWidget = LightPositionWidget(index: index)
             
@@ -139,7 +139,7 @@ class ShadingImageEditor: UIControl
     
     func setUpSceneKit()
     {
-        sceneKitView.backgroundColor = UIColor.blackColor()
+        sceneKitView.backgroundColor = .black
         
         let sphere = SCNSphere(radius: 1)
         let sphereNode = SCNNode(geometry: sphere)
@@ -170,22 +170,22 @@ class ShadingImageEditor: UIControl
             scene.rootNode.addChildNode(light)
         }
         
-        material.lightingModelName = SCNLightingModelPhong
-        material.specular.contents = UIColor.whiteColor()
-        material.diffuse.contents = UIColor.darkGrayColor()
+        material.lightingModel = .phong
+        material.specular.contents = UIColor.white
+        material.diffuse.contents = UIColor.darkGray
         material.shininess = 0.15
         
         sphere.materials = [material]
     }
     
-    func sliderChangeHandler(slider: LabelledSlider)
+    @objc func sliderChangeHandler(_ slider: LabelledSlider)
     {
         guard let parameter = slider.parameter else
         {
             return
         }
         
-        updateSceneFromParameter(parameter)
+        updateSceneFromParameter(parameter: parameter)
     }
     
     func applyAllParameters()
@@ -194,7 +194,7 @@ class ShadingImageEditor: UIControl
         {
             for parameter in group.parameters
             {
-                updateSceneFromParameter(parameter)
+                updateSceneFromParameter(parameter: parameter)
             }
         }
     }
@@ -243,7 +243,7 @@ class ShadingImageEditor: UIControl
             width: frame.width,
             height: frame.height - frame.width)
         
-        tableView.separatorStyle = UITableViewCellSeparatorStyle.None
+        tableView.separatorStyle = .none
         
         positionLightWidgets()
     }
@@ -254,7 +254,7 @@ class ShadingImageEditor: UIControl
 
 extension ShadingImageEditor: SCNSceneRendererDelegate
 {
-    func renderer(renderer: SCNSceneRenderer, didRenderScene scene: SCNScene, atTime time: NSTimeInterval)
+    func renderer(_ renderer: SCNSceneRenderer, didRenderScene scene: SCNScene, atTime time: TimeInterval)
     {
         guard sceneChanged else
         {
@@ -263,9 +263,9 @@ extension ShadingImageEditor: SCNSceneRendererDelegate
         
         sceneChanged = false
         
-        dispatch_async(dispatch_get_main_queue())
+        DispatchQueue.main.async
         {
-            self.sendActionsForControlEvents(UIControlEvents.ValueChanged)
+            self.sendActions(for: .valueChanged)
         }
     }
 }
@@ -281,29 +281,29 @@ extension ShadingImageEditor: UITableViewDelegate
 
 extension ShadingImageEditor: UITableViewDataSource
 {
-    func numberOfSectionsInTableView(tableView: UITableView) -> Int
+    func numberOfSections(in tableView: UITableView) -> Int
     {
         return parameterGroups.count
     }
     
-    func tableView(tableView: UITableView, numberOfRowsInSection section: Int) -> Int
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int
     {
         return parameterGroups[section].parameters.count
     }
     
-    func tableView(tableView: UITableView, cellForRowAtIndexPath indexPath: NSIndexPath) -> UITableViewCell
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell
     {
-        let cell = tableView.dequeueReusableCellWithIdentifier("ItemRenderer",
-            forIndexPath: indexPath) as! ItemRenderer
+        let cell = tableView.dequeueReusableCell(withIdentifier: "ItemRenderer",
+                                                 for: indexPath) as! ItemRenderer
         
         cell.parameter = parameterGroups[indexPath.section].parameters[indexPath.item]
         
-        cell.slider.addTarget(self, action: "sliderChangeHandler:", forControlEvents: UIControlEvents.ValueChanged)
+        cell.slider.addTarget(self, action: #selector(sliderChangeHandler(_:)), for: .valueChanged)
         
         return cell
     }
     
-    func tableView(tableView: UITableView, titleForHeaderInSection section: Int) -> String?
+    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String?
     {
         return parameterGroups[section].name
     }
@@ -317,15 +317,15 @@ class LightPositionWidget: UIView
     
     required init(index: Int)
     {
-        super.init(frame: CGRectZero)
+        super.init(frame: .zero)
         
         layer.borderWidth = 1
-        layer.borderColor = UIColor.whiteColor().CGColor
+        layer.borderColor = UIColor.white.cgColor
         
         label.text = "\(index + 1)"
-        label.font = UIFont.boldSystemFontOfSize(12)
-        label.textColor = UIColor.darkGrayColor()
-        label.textAlignment = NSTextAlignment.Center
+        label.font = UIFont.boldSystemFont(ofSize: 12)
+        label.textColor = UIColor.darkGray
+        label.textAlignment = .center
         
         addSubview(label)
     }
@@ -346,9 +346,7 @@ class LightPositionWidget: UIView
                 
                 color.getWhite(&white, alpha: &alpha)
                 
-                label.textColor = white < 0.5 ?
-                    UIColor.whiteColor() :
-                    UIColor.blackColor()
+                label.textColor = white < 0.5 ? .white : .black
             }
         }
     }
@@ -359,7 +357,7 @@ class LightPositionWidget: UIView
         
         label.frame = bounds
         
-        label.shadowColor = UIColor.whiteColor()
+        label.shadowColor = .white
         label.shadowOffset = CGSize(width: 0, height: 0)
     }
     

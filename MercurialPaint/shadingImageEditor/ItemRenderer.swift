@@ -18,7 +18,7 @@ class ItemRenderer: UITableViewCell
         {
         didSet
         {
-            slider.enabled = enabled
+            slider.isEnabled = enabled
         }
     }
     
@@ -30,11 +30,11 @@ class ItemRenderer: UITableViewCell
         }
     }
     
-    override init(style: UITableViewCellStyle, reuseIdentifier: String?)
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?)
     {
         super.init(style: style, reuseIdentifier: "ItemRenderer")
         
-        backgroundColor = UIColor.blackColor()
+        backgroundColor = .black
         
         contentView.addSubview(slider)
     }
@@ -58,15 +58,15 @@ class LabelledSlider: UIControl
     let valueLabel = UILabel()
     let slider = UISlider()
     
-    override var enabled: Bool
+    override var isEnabled: Bool
     {
         didSet
         {
-            userInteractionEnabled = enabled
+            isUserInteractionEnabled = isEnabled
             
-            label.enabled = enabled
-            valueLabel.enabled = enabled
-            slider.enabled = enabled
+            label.isEnabled = isEnabled
+            valueLabel.isEnabled = isEnabled
+            slider.isEnabled = isEnabled
         }
     }
     
@@ -95,13 +95,13 @@ class LabelledSlider: UIControl
     {
         super.init(frame: frame)
         
-        label.textColor = UIColor.whiteColor()
-        valueLabel.textColor = UIColor.whiteColor()
+        label.textColor = .white
+        valueLabel.textColor = .white
         
         label.adjustsFontSizeToFitWidth = true
         valueLabel.adjustsFontSizeToFitWidth = true
         
-        valueLabel.textAlignment = NSTextAlignment.Right
+        valueLabel.textAlignment = .right
         
         addSubview(label)
         addSubview(valueLabel)
@@ -109,7 +109,7 @@ class LabelledSlider: UIControl
         
         label.numberOfLines = 0
         
-        slider.addTarget(self, action: "sliderChangeHandler", forControlEvents: UIControlEvents.ValueChanged)
+        slider.addTarget(self, action: #selector(sliderChangeHandler), for: .valueChanged)
     }
     
     required init?(coder aDecoder: NSCoder)
@@ -117,7 +117,7 @@ class LabelledSlider: UIControl
         fatalError("init(coder:) has not been implemented")
     }
     
-    func sliderChangeHandler()
+    @objc func sliderChangeHandler()
     {
         parameter?.value = CGFloat(slider.value)
         
@@ -128,7 +128,7 @@ class LabelledSlider: UIControl
         
         valueLabel.text = String(format: "%.2f", parameter.value)
         
-        sendActionsForControlEvents(UIControlEvents.ValueChanged)
+        sendActions(for: .valueChanged)
     }
     
     override func layoutSubviews()
@@ -136,19 +136,19 @@ class LabelledSlider: UIControl
         label.frame = CGRect(x: 5,
             y: 2,
             width: frame.width / 2,
-            height: label.intrinsicContentSize().height).insetBy(dx: 2, dy: 0)
+            height: label.intrinsicContentSize.height).insetBy(dx: 2, dy: 0)
         
         valueLabel.frame = CGRect(x: frame.width / 2,
             y: 2,
             width: frame.width / 2,
-            height: valueLabel.intrinsicContentSize().height).insetBy(dx: 2, dy: 0)
+            height: valueLabel.intrinsicContentSize.height).insetBy(dx: 2, dy: 0)
         
         slider.frame = CGRect(x: 0,
             y: frame.height / 2 - 2,
             width: frame.width,
-            height: slider.intrinsicContentSize().height).insetBy(dx: 2, dy: 0)
+            height: slider.intrinsicContentSize.height).insetBy(dx: 2, dy: 0)
         
-        layer.borderColor = UIColor.darkGrayColor().CGColor
+        layer.borderColor = UIColor.darkGray.cgColor
         layer.borderWidth = 1
     }
     
